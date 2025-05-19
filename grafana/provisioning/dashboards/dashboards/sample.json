@@ -1,0 +1,16 @@
+{
+    "uid": "fake-metrics",
+    "title": "Fake Metrics Overview",
+    "panels": [
+        {
+            "type": "graph",
+            "title": "Random Gauge",
+            "targets": [
+                {
+                    "expr": "fake_random_metric",
+                    "legendFormat": "{{instance}}"
+                }
+            ]
+        }
+    ]
+}

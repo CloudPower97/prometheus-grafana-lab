@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["prometheus:9090"]
+
+  - job_name: "node_app"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["node-app:3001"]
+
+  - job_name: "fake_exporter"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["fake-exporter:8000"]
