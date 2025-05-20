@@ -320,10 +320,13 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
 
 1. **Add Dashboard Variables**
 
-   - Go to **Dashboard Settings → Variables → Add variable**.
-   - Select `Custom` from the variable type dropdown.
-   - Create a variable named `job`.
-   - Set the custom value as `node_app`.
+   - From the menu on the left select **Dashboard**;
+   - Click on the button **New** and select **New dashboard**;
+   - Click on **Settings → Variables → Add variable**;
+   - Select `Custom` from the variable type dropdown;
+   - Insert `job` as name;
+   - Under the section `Custom options` set the value as `node_app`;
+   - Click the button **Back to dashboard**;
    - Reference `${job}` in every query to make the dashboard reusable across different services.
 
 2. **Panel: CPU Usage**
@@ -341,43 +344,43 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
 
 3. **Panel: Memory Usage**
 
-   - Panel Type: Gauge.
-   - Query:
+   - **Recommended Panel Type**: Gauge.
+   - **Query**:
 
      ```promql
      process_resident_memory_bytes{job="${job}"}
      ```
 
-   - Title: "Memory Usage (RSS)".
+   - **Title**: "Memory Usage (RSS)".
    - **Unit Display**: In the panel’s **Field** tab under **Standard options**, set **Unit** to **bytes (IEC)** or **bytes (SI)** so Grafana automatically displays values in KB, MB, or GB based on magnitude.
 
 4. **Panel: Request Rate**
 
-   - Panel Type: Bar chart, Table, or Heatmap (alternative to Time series).
+   - **Recommended Panel Types:**
 
-     - Bar chart or Bar gauge: compares request rates per route in a single snapshot (e.g., last minute).
-     - Table: displays numeric rates per route with sorting and threshold coloring.
+     - Bar chart or Bar gauge: compares request rates per route in a single snapshot (e.g., last minute);
+     - Table: displays numeric rates per route with sorting and threshold coloring;
      - Heatmap: visualizes rate distributions over time across routes.
 
-   - Query:
+   - **Query**:
 
      ```promql
      sum by (route)(rate(http_requests_total{job="${job}"}[1m]))
      ```
 
-   - Title: "Requests per Route".
-   - Legend Formatting: Under the panel’s Field (or Display) settings, set Legend to {{route}} so only the route label appears, removing the full query expression from the legend.
+   - **Title**: "Requests per Route".
+   - **Legend Formatting**: Under the panel’s Field (or Display) settings, set Legend to {{route}} so only the route label appears, removing the full query expression from the legend.
    - Unit Display: Set Unit to requests/sec under Field → Standard option
 
 5. **Panel: Latency (95th Percentile)**
 
-   - Recommended Panel Types:
+   - **Recommended Panel Types:**
 
      - Time series: classic view showing latency over time.
      - Heatmap: visualize distribution of request latencies over time buckets—ideal for spotting shifts in response-time patterns.
      - Gauge or Stat: show the current 95th percentile value as a single-figure metric.
 
-   - Query:
+   - **Query**:
 
      ```promql
      histogram_quantile(0.95,
@@ -385,9 +388,9 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
      )
      ```
 
-   - Title: "95th Percentile Request Latency".
+   - **Title**: "95th Percentile Request Latency".
 
-   - Unit Display:
+   - **Unit Display**:
 
      - In the panel’s Field tab under Standard options, set Unit to milliseconds (ms) or seconds (s) depending on your application’s scale.
 
