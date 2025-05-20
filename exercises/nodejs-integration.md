@@ -159,11 +159,11 @@ Instrument and analyze HTTP request durations.
    > A bucket is a range container counting how many observations fall below or equal to its upper bound.
    > Each value in the buckets array defines the upper limit of that range.
    >
-   > Prometheus exposure:
+   > For each threshold in buckets (0.1 s, 0.3 s, …, 5 s) plus a final “+Inf” bucket, the client automatically exposes a metric called: `app_request_duration_seconds_bucket{…, le="<threshold>", …}`
    >
-   > Generates app_request_duration_seconds_bucket{le="<upper_bound>"} for each bucket.
-   >
-   > Also exports app_request_duration_seconds_sum and app_request_duration_seconds_count for aggregate calculations.
+   > Each of those is a cumulative counter: it increments by one whenever a request’s duration is less than or equal to that threshold.
+   > Prometheus periodically “scrapes” (fetches) your /metrics endpoint to collect current values. In this examples we instructed Prometheus to scrape every 15s.
+   > Each scrape produces a sample (essentially a pair): `<value> @ <timestamp>` where `<value>` is the current counter and `<timestamp>` is when the scrape happened (Unix time with fractions).
 
 2. **Wrap route handlers**
 
@@ -188,62 +188,109 @@ Instrument and analyze HTTP request durations.
 
 4. **Query latency in Prometheus**
 
-   1. **Raw Buckets Query**
+5. **Raw Buckets Query**
 
-      ```promql
-      app_request_duration_seconds_bucket[5m]
-      ```
+   ```promql
+   app_request_duration_seconds_bucket[5m]
+   ```
 
-      Purpose: View the number of observations per bucket over the last 5 minutes.
+   Purpose: View the number of observations per bucket over the last 5 minutes.
 
-      Output: Time series with label le indicating each bucket’s upper bound.
+   Output: Time series with label le indicating each bucket’s upper bound.
 
-   2. **Applying rate()**
+   > 📝 Note
+   > When you run a PromQL query like the one above, you ask Prometheus for all samples of that time-series over the last five minutes.
+   > Prometheus replies with lines such as: 1 @ 1747721597.399, 1 @ 1747721612.397, ...etc.
+   > The “1” is the bucket’s counter at that scrape, the “@ timestamp” is when it was collected.
+   > These lines are stacked (“impilati”) because you’re looking at every scrape in that window.
+   > Because you scrape every 15 seconds, in any given time window of length W seconds you’ll see roughly W / 15 samples.
+   > A [1m] (60 s) query returns about 60 s ÷ 15 s = 4 samples.
+   > A [5m] (300 s) query returns about 300 s ÷ 15 s = 20 samples.
+   > In the end is important to remeber that range vectors ([Xm]) simply collect all those points over the past X minutes—hence the direct proportionality between window length and number of samples.
 
-      ```promql
-      rate(app_request_duration_seconds_bucket[5m])
-      ```
+6. **Applying rate()**
 
-      Why rate? Converts the monotonically increasing bucket counters into per-second rates of observations.
+   ```promql
+   rate(app_request_duration_seconds_bucket[5m])
+   ```
 
-      Result: A rate value for each bucket time series.
+   Why rate? Converts the monotonically increasing bucket counters into per-second rates of observations.
 
-   3. **Aggregating by Bucket Upper Bound (le)**
+   Result: A rate value for each bucket time series.
 
-      ```promql
-      sum by (le)(rate(app_request_duration_seconds_bucket[5m]))
-      ```
+   > 📝 Note
+   >
+   > 1. What rate() Does
+   >
+   > - Input: a range vector of samples from a single counter metric over a fixed time window (e.g. app_request_duration_seconds_bucket[5m] gives you all of that bucket’s values at each scrape in the last five minutes).
+   >
+   > - Output: an instant vector — one number per distinct series (i.e. per unique combination of your labels, including each bucket "le" value).
+   >
+   > 2. From Range to Single Value
+   >    You start with a list of pairs: `value₁ @ t₁, value₂ @ t₂, …, valueₙ @ tₙ`
+   >
+   >    To get precise “start” and “end” values at exactly 5 minutes ago and “now,” Prometheus linearly interpolates between the nearest two real samples at each end.
+   >
+   >    This basically means that we compute an istant vector. As a matter of fact, unlike metric[5m], which returns all the raw points, rate(metric[5m]) collapses them into one averaged-per-second value.
+   >
+   >    This instanct vector is a simple arithmetic rate (total increase ÷ total time), it is not a median or a series of segment-by-segment averages — it’s the end-to-end slope of your counter over the full window.
 
-      `sum by (le)`: Aggregates rates across all label dimensions except the bucket bound (le).
+7. **Aggregating by Bucket Upper Bound (le)**
 
-      Result: Total rate of observations for each bucket threshold.
+   ```promql
+   sum by (le)(rate(app_request_duration_seconds_bucket[5m]))
+   ```
 
-   4. **Computing the Quantile**
+   `sum by (le)`: Aggregates rates across all label dimensions except the bucket bound (le).
 
-      ```promql
-      histogram_quantile(0.95, sum by (le)(rate(app_request_duration_seconds_bucket[5m])))
-      ```
+   Result: Total rate of observations for each bucket threshold.
 
-      Or if you want to see the results for each route
+   > Note
+   > sum by (le)(…) discards all other labels (like HTTP method, route, status code) and then adds up every instance’s rate, separately for each le value (e.g. le="0.1", le="0.3", …, le="+Inf").
+   >
+   > You end up with one rate number per bucket threshold, representing the average number of requests per second, across your entire service, that fall into each “≤ le” category over the last five minutes.
+   >
+   > This gives you the aggregated histogram data needed to see, for example, how many sub-0.1 s or sub-1 s requests you’re getting per second overall.
+   >
+   > It’s also the required pre-aggregation step for percentile functions like histogram_quantile().
 
-      ```promql
-      histogram_quantile(
-         0.95,
-         sum by (route, method, le)(rate(app_request_duration_seconds_bucket[5m]))
-      )
-      ```
+8. **Computing the Quantile**
 
-      - histogram_quantile(φ, ...): Calculates the φ-th quantile (here, 95th percentile) from bucketed data.
+   ```promql
+   histogram_quantile(0.95, sum by (le)(rate(app_request_duration_seconds_bucket[5m])))
+   ```
 
-      Parameters:
+   Or if you want to see the results for each route
 
-      - 0.95: Desired percentile.
+   ```promql
+   histogram_quantile(
+      0.95,
+      sum by (route, method, le)(rate(app_request_duration_seconds_bucket[5m]))
+   )
+   ```
 
-      - sum by (le)(rate(...)): Aggregated bucket rates.
+   - histogram_quantile(φ, ...): Calculates the φ-th quantile (here, 95th percentile) from bucketed data.
 
-      Outcome: The latency value below which 95% of requests fall
+   Parameters:
 
-      Note: it might be intereseting to deliberately cause a latency in one of the endpoints, just to see the effects.
+   - 0.95: Desired percentile.
+
+   - sum by (le)(rate(...)): Aggregated bucket rates.
+
+   Outcome: The latency value below which 95% of requests fall
+
+   > ✅ Tip
+   > It might be intereseting to deliberately cause a latency in one of the endpoints, just to see the effects.
+
+   > 📝 Note
+   > What histogram_quantile() Does
+   > It takes a quantile parameter (here 0.95) and an aggregated histogram (your summed rates per bucket) and returns an estimated value (in seconds) at which that quantile occurs.
+   >
+   > In plain terms, it answers: “What request duration marks the 95th percentile of all requests in the last 5 minutes, for each route-method pair?”
+   >
+   > 0.95 → the target quantile (95%).
+   >
+   > sum by (route, method, le)(rate(...)) → for each (route, method, le) you have a single rate value: the average number of requests/sec that fell into “≤ le” during the past 5 minutes.
 
 ---
 
@@ -274,7 +321,9 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
 1. **Add Dashboard Variables**
 
    - Go to **Dashboard Settings → Variables → Add variable**.
+   - Select `Custom` from the variable type dropdown.
    - Create a variable named `job`.
+   - Set the custom value as `node_app`.
    - Reference `${job}` in every query to make the dashboard reusable across different services.
 
 2. **Panel: CPU Usage**
@@ -378,6 +427,7 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
      - For single-value panels (Stat/Gauge), hide the legend to reduce clutter. Panel: Garbage Collection -->
 
 7. **Panel: Garbage Collection**
+   //TODO: capire a quale comando fa riferimento perchè questo manca
 
    - Panel Type: Time series.
    - Query:
