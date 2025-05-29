@@ -329,20 +329,7 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
    - Click the button **Back to dashboard**;
    - Reference `${job}` in every query to make the dashboard reusable across different services.
 
-2. **Panel: CPU Usage**
-
-   - Panel Type: Gauge.
-   - Query:
-
-     ```promql
-     rate(process_cpu_seconds_total{job="${job}"}[1m])
-     ```
-
-   - Title: "CPU Usage (1m rate)".
-   - Unit Display: In the panel’s Field tab under Standard options, set Unit percent (0-100) for a percentage view.
-   - Thresholds and Coloring: In Field → Thresholds, define thresholds (e.g., warning at 80%, critical at 90%) for visual alerting.
-
-3. **Panel: Memory Usage**
+2. **Panel: Memory Usage**
 
    - **Recommended Panel Type**: Gauge.
    - **Query**:
@@ -354,7 +341,7 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
    - **Title**: "Memory Usage (RSS)".
    - **Unit Display**: In the panel’s **Field** tab under **Standard options**, set **Unit** to **bytes (IEC)** or **bytes (SI)** so Grafana automatically displays values in KB, MB, or GB based on magnitude.
 
-4. **Panel: Request Rate**
+3. **Panel: Request Rate**
 
    - **Recommended Panel Types:**
 
@@ -372,7 +359,7 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
    - **Legend Formatting**: Under the panel’s Field (or Display) settings, set Legend to {{route}} so only the route label appears, removing the full query expression from the legend.
    - Unit Display: Set Unit to requests/sec under Field → Standard option
 
-5. **Panel: Latency (95th Percentile)**
+4. **Panel: Latency (95th Percentile)**
 
    - **Recommended Panel Types:**
 
@@ -400,69 +387,58 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
 
      - In Field → Thresholds, define thresholds for warning (e.g., 200 ms) and critical (e.g., 500 ms
 
-<!-- 6. **Panel: Error Rate**
+5. **Panel: Heap Usage**
 
-   - Recommended Panel Types:
+- **Recommended Panel Types**:
 
-     - Stat or Gauge: display the current 5xx error rate as a single value.
-     - Bar gauge: show the error percentage against defined thresholds.
-     - Time series: track the error rate trend over time.
+  - Time series: compare heap used and total size over time.
+  - Stat or Gauge: show current heap usage or usage percentage.
+  - Bar gauge: useful for displaying used vs. total heap as a single visualization.
 
-   - Query:
+- **Queries**:
 
-     ```promql
-     sum by (status)(rate(http_requests_total{job="${job}",status_code=~"5.."}[5m]))
-       /
-     sum(rate(http_requests_total{job="${job}"}[5m]))
-     * 100
-     ```
+  - `nodejs_heap_size_used_bytes{job="${job}"}`
+  - `nodejs_heap_size_total_bytes{job="${job}"}`
 
-   - Title: "5xx Error Rate (%)".
-   - Unit Display: In Field → Standard options, set Unit to percent (0-100).
+- Title: "Heap Used vs Heap Size".
 
-   - Thresholds and Coloring:
+- **Unit Display**: In Field → Standard options, set Unit to bytes (SI) or megabytes (MiB). Grafana will auto-scale.
 
-     - In Field → Thresholds, add a warning threshold at 1% and a critical threshold at 5%.
-     - For Bar gauge, configure color steps matching these thresholds.
+- **Thresholds and Coloring**: In Field → Thresholds, add thresholds on Heap Usage (%) at warning (e.g., 70%) and critical (e.g., 90%).
 
-   - Legend and Display:
-     - For Time series, set Legend to {{status}} so only status codes appear.
-     - For single-value panels (Stat/Gauge), hide the legend to reduce clutter. Panel: Garbage Collection -->
+- **Legend and Display**:
 
-7. **Panel: Garbage Collection**
-   //TODO: capire a quale comando fa riferimento perchè questo manca
+  - For multi-series panels, set Legend to {{__field.name}}.
+  - For single-value panels, hide the legend and display field titles clearly.
 
-   - Panel Type: Time series.
-   - Query:
+  <!-- 6. **Panel: Error Rate**
 
-     ```promql
-     rate(nodejs_gc_runs_total{job="${job}"}[1m])
-     ```
+  - Recommended Panel Types:
 
-   - Title: "GC Runs per Minute".
+    - Stat or Gauge: display the current 5xx error rate as a single value.
+    - Bar gauge: show the error percentage against defined thresholds.
+    - Time series: track the error rate trend over time.
 
-8. **Panel: Heap Usage**
+  - Query:
 
-   - Recommended Panel Types:
+    ```promql
+    sum by (status)(rate(http_requests_total{job="${job}",status_code=~"5.."}[5m]))
+      /
+    sum(rate(http_requests_total{job="${job}"}[5m]))
+    * 100
+    ```
 
-     - Time series: compare heap used and total size over time.
-     - Stat or Gauge: show current heap usage or usage percentage.
-     - Bar gauge: useful for displaying used vs. total heap as a single visualization.
+  - Title: "5xx Error Rate (%)".
+  - Unit Display: In Field → Standard options, set Unit to percent (0-100).
 
-   - Queries:
+  - Thresholds and Coloring:
 
-     - `nodejs_heap_used_bytes{job="${job}"}`
-     - `nodejs_heap_size_total_bytes{job="${job}"}`
+    - In Field → Thresholds, add a warning threshold at 1% and a critical threshold at 5%.
+    - For Bar gauge, configure color steps matching these thresholds.
 
-   - Title: "Heap Used vs Heap Size".
-
-   - Unit Display: In Field → Standard options, set Unit to bytes (SI) or megabytes (MiB). Grafana will auto-scale.
-
-   - Thresholds and Coloring: In Field → Thresholds, add thresholds on Heap Usage (%) at warning (e.g., 70%) and critical (e.g., 90%).
-
-   - Legend and Display:
-     - For multi-series panels, set Legend to {{__field.name}}.
-     - For single-value panels, hide the legend and display field titles clearly.
+  - Legend and Display:
+    - For Time series, set Legend to {{status}} so only status codes appear.
+    - For single-value panels (Stat/Gauge), hide the legend to reduce clutter. Panel: Garbage Collection -->
 
 ---
 
@@ -475,14 +451,6 @@ Build and enhance a Grafana dashboard to monitor not only core performance metri
 - Ensure your **Alert** rules include both notification channels and clear severity labels.
 
 ---
-
-## Reflection Questions
-
-1. Which dashboard variable makes the dashboard most flexible across environments?
-2. How did you configure the alert for error rate? Which threshold and evaluation interval did you choose?
-3. In what ways did deploy annotations assist in your post-mortem analysis?
-4. What patterns did you observe in garbage collection metrics after extended load tests?
-5. If you needed to add a custom internal metric (e.g., queue length), how would you instrument it in Node.js and consume it in Prometheus + Grafana?
 
 # Exercise 5: Alerting on Error Rate in Prometheus
 
