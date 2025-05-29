@@ -202,7 +202,7 @@ Instrument and analyze HTTP request durations.
    > When you run a PromQL query like the one above, you ask Prometheus for all samples of that time-series over the last five minutes.
    > Prometheus replies with lines such as: 1 @ 1747721597.399, 1 @ 1747721612.397, ...etc.
    > The “1” is the bucket’s counter at that scrape, the “@ timestamp” is when it was collected.
-   > These lines are stacked (“impilati”) because you’re looking at every scrape in that window.
+   > These lines are stacked because you’re looking at every scrape in that window.
    > Because you scrape every 15 seconds, in any given time window of length W seconds you’ll see roughly W / 15 samples.
    > A [1m] (60 s) query returns about 60 s ÷ 15 s = 4 samples.
    > A [5m] (300 s) query returns about 300 s ÷ 15 s = 20 samples.
